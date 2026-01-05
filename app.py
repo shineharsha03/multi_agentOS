@@ -10,10 +10,8 @@ from pypdf import PdfReader
 st.set_page_config(page_title="Universal AI Architect", page_icon="🧠", layout="wide")
 
 # 1. FORCE MANUAL LOGIN (Always ask)
-GROQ_API_KEY = st.text_input("Enter Groq API Key:", type="password")
-if not GROQ_API_KEY:
-    st.info("Please enter your API key to continue.")
-    st.stop()
+# The .strip() removes hidden spaces automatically
+GROQ_API_KEY = st.text_input("Enter Groq API Key:", type="password").strip()
 
 # 2. INITIALIZE CLIENT (Do not cache this!)
 groq_client = Groq(api_key=GROQ_API_KEY)
