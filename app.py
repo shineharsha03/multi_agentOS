@@ -9,27 +9,29 @@ from pypdf import PdfReader
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Universal AI Architect", page_icon="🧠", layout="wide")
 
-# Secure API Key Handling
-# FORCE MANUAL ENTRY (Bypassing Secrets for now)
+# 1. FORCE MANUAL LOGIN (Always ask)
 GROQ_API_KEY = st.text_input("Enter Groq API Key:", type="password")
-if not GROQ_API_KEY: 
+if not GROQ_API_KEY:
+    st.info("Please enter your API key to continue.")
     st.stop()
-# --- LOAD RESOURCES ---
-@st.cache_resource
-def load_resources():
-    embedding_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
-    client = QdrantClient(":memory:") # RAM Mode (Fast & Clean)
-    groq_client = Groq(api_key=GROQ_API_KEY)
-    return embedding_model, client, groq_client
 
-embedding_model, client, groq_client = load_resources()
+# 2. INITIALIZE CLIENT (Do not cache this!)
+groq_client = Groq(api_key=GROQ_API_KEY)
+
+# --- LOAD HEAVY RESOURCES (Cache these only) ---
+@st.cache_resource
+def load_heavy_models():
+    embedding_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+    client = QdrantClient(":memory:") # RAM Mode
+    return embedding_model, client
+
+embedding_model, client = load_heavy_models()
 COLLECTION_NAME = "knowledge_base"
 
 # --- SIDEBAR: MISSION CONTROL ---
 with st.sidebar:
     st.header("🎛️ Agent Controller")
     
-    # 1. THE AGENT SWITCHER (NOW WITH 3 MODES)
     agent_mode = st.selectbox(
         "Select AI Persona:",
         ["Medical Appeal Shark", "Wall Street Analyst", "SaaS Customer Support"]
@@ -37,13 +39,11 @@ with st.sidebar:
     
     st.divider()
     
-    # 2. DATA UPLOADER
     st.write(f"📂 Upload Data for **{agent_mode}**")
     uploaded_file = st.file_uploader("Upload PDF/TXT", type=["pdf", "txt"])
     
     if uploaded_file and st.button("Train Agent"):
         with st.spinner("Processing Data..."):
-            # Extract
             text_data = []
             if uploaded_file.name.endswith(".pdf"):
                 reader = PdfReader(uploaded_file)
@@ -52,7 +52,6 @@ with st.sidebar:
             else: 
                 text_data = [uploaded_file.read().decode("utf-8")]
 
-            # Vectorize & Save
             full_text = "\n".join(text_data)
             chunks = [chunk for chunk in full_text.split('\n') if chunk.strip()]
             
@@ -70,40 +69,21 @@ with st.sidebar:
             
         st.success(f"✅ {agent_mode} is ready!")
 
-# --- DYNAMIC PROMPT SYSTEM (THE BRAIN) ---
+# --- DYNAMIC PROMPT SYSTEM ---
 if agent_mode == "Medical Appeal Shark":
     st.title("⚖️ AppealOS: Denial Crusher")
     input_placeholder = "Describe the denied claim..."
-    base_prompt = """
-    You are a Senior Medical Billing Advocate. 
-    Write an aggressive, formal appeal letter. 
-    Cite the uploaded policy explicitly. 
-    Demand payment.
-    """
+    base_prompt = "You are a Senior Medical Billing Advocate. Write an aggressive, formal appeal letter. Cite the uploaded policy explicitly. Demand payment."
 
 elif agent_mode == "Wall Street Analyst":
     st.title("📈 MarketMind: Stock Analyst")
     input_placeholder = "Ask about the stock..."
-    base_prompt = """
-    You are a Hedge Fund Analyst.
-    Analyze the uploaded financial report.
-    Look for risks, growth potential, and 'Golden Crossover' signals.
-    Give a clear 'BUY', 'HOLD', or 'SELL' recommendation.
-    """
+    base_prompt = "You are a Hedge Fund Analyst. Analyze the report. Look for risks and 'Golden Crossover' signals. Give a clear BUY/SELL recommendation."
 
-else: # SaaS Customer Support
+else: # SaaS Support
     st.title("🤝 SaaS-Hero: Retention Expert")
     input_placeholder = "Paste the angry customer email here..."
-    base_prompt = """
-    You are a Senior Customer Success Manager for a SaaS Company.
-    Your Goal: De-escalate the angry customer.
-    
-    RULES:
-    1. Be incredibly empathetic and professional.
-    2. REFUSE the refund if the uploaded policy says 'No Refunds'.
-    3. Instead of money, offer a 'Free 1-Hour Training Session' or 'Extended Trial'.
-    4. Reference the policy gently to explain why the refund is denied.
-    """
+    base_prompt = "You are a Senior Customer Success Manager. De-escalate the angry customer. REFUSE the refund if policy says 'No Refunds'. Offer a 'VIP Training Session' instead."
 
 # --- CHAT INTERFACE ---
 if "messages" not in st.session_state:
@@ -118,7 +98,6 @@ if prompt := st.chat_input(input_placeholder):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # SEARCH
     try:
         query_vector = list(embedding_model.embed([prompt]))[0].tolist()
         search_results = client.query_points(collection_name=COLLECTION_NAME, query=query_vector, limit=5).points
@@ -126,21 +105,19 @@ if prompt := st.chat_input(input_placeholder):
     except:
         context_text = ""
 
-    # GENERATE
     if not context_text:
         response = "⚠️ I have no data. Please upload a document first."
     else:
-        system_prompt = f"""
-        {base_prompt}
+        system_prompt = f"{base_prompt}\n\n--- DATA CONTEXT ---\n{context_text}"
         
-        --- DATA CONTEXT ---
-        {context_text}
-        """
-        chat_completion = groq_client.chat.completions.create(
-            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
-        )
-        response = chat_completion.choices[0].message.content
+        try:
+            chat_completion = groq_client.chat.completions.create(
+                messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
+                model="llama-3.3-70b-versatile",
+            )
+            response = chat_completion.choices[0].message.content
+        except Exception as e:
+            response = f"Error: {str(e)}"
 
     st.session_state.messages.append({"role": "assistant", "content": response})
     with st.chat_message("assistant"):
