@@ -13,7 +13,7 @@ st.set_page_config(page_title="Universal AI Architect", page_icon="🧠", layout
 try:
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except:
-    GROQ_API_KEY = st.text_input("Enter Groq API Key:", type="password")
+    GROQ_API_KEY = st.text_input("Enter Groq API Key:")
     if not GROQ_API_KEY: st.stop()
 
 # --- LOAD RESOURCES ---
