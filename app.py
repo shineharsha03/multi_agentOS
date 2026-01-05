@@ -8,15 +8,14 @@ from pypdf import PdfReader
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Universal AI Architect", page_icon="🧠", layout="wide")
-# Try to get the key from the Cloud Secret Vault
+
+# Secure API Key Handling
 try:
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except:
-    # If running locally on your laptop, ask for it
     GROQ_API_KEY = st.text_input("Enter Groq API Key:", type="password")
-    if not GROQ_API_KEY:
-        st.stop()
-        
+    if not GROQ_API_KEY: st.stop()
+
 # --- LOAD RESOURCES ---
 @st.cache_resource
 def load_resources():
@@ -32,10 +31,10 @@ COLLECTION_NAME = "knowledge_base"
 with st.sidebar:
     st.header("🎛️ Agent Controller")
     
-    # 1. THE AGENT SWITCHER
+    # 1. THE AGENT SWITCHER (NOW WITH 3 MODES)
     agent_mode = st.selectbox(
         "Select AI Persona:",
-        ["Medical Appeal Shark", "Wall Street Analyst"]
+        ["Medical Appeal Shark", "Wall Street Analyst", "SaaS Customer Support"]
     )
     
     st.divider()
@@ -73,8 +72,7 @@ with st.sidebar:
             
         st.success(f"✅ {agent_mode} is ready!")
 
-# --- DYNAMIC PROMPT SYSTEM ---
-# This is the "1% Engineering" part: Changing logic based on State.
+# --- DYNAMIC PROMPT SYSTEM (THE BRAIN) ---
 if agent_mode == "Medical Appeal Shark":
     st.title("⚖️ AppealOS: Denial Crusher")
     input_placeholder = "Describe the denied claim..."
@@ -84,14 +82,29 @@ if agent_mode == "Medical Appeal Shark":
     Cite the uploaded policy explicitly. 
     Demand payment.
     """
-else:
+
+elif agent_mode == "Wall Street Analyst":
     st.title("📈 MarketMind: Stock Analyst")
-    input_placeholder = "Ask about the stock (e.g., 'Is this a Buy based on the report?')"
+    input_placeholder = "Ask about the stock..."
     base_prompt = """
-    You are a Hedge Fund Analyst with 20 years of experience.
+    You are a Hedge Fund Analyst.
     Analyze the uploaded financial report.
-    Look for risks, growth potential, and 'Golden Crossover' signals if mentioned.
-    Give a clear 'BUY', 'HOLD', or 'SELL' recommendation based ONLY on the data.
+    Look for risks, growth potential, and 'Golden Crossover' signals.
+    Give a clear 'BUY', 'HOLD', or 'SELL' recommendation.
+    """
+
+else: # SaaS Customer Support
+    st.title("🤝 SaaS-Hero: Retention Expert")
+    input_placeholder = "Paste the angry customer email here..."
+    base_prompt = """
+    You are a Senior Customer Success Manager for a SaaS Company.
+    Your Goal: De-escalate the angry customer.
+    
+    RULES:
+    1. Be incredibly empathetic and professional.
+    2. REFUSE the refund if the uploaded policy says 'No Refunds'.
+    3. Instead of money, offer a 'Free 1-Hour Training Session' or 'Extended Trial'.
+    4. Reference the policy gently to explain why the refund is denied.
     """
 
 # --- CHAT INTERFACE ---
